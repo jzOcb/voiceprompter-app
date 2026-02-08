@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VoicePrompter</string>
+    <string name="title_activity_main">VoicePrompter</string>
+    <string name="package_name">com.voiceprompter.app</string>
+    <string name="custom_url_scheme">com.voiceprompter.app</string>
+</resources>

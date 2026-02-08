@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VoicePrompter - 语音提词器</title>
+    
+    <!-- Capacitor Native Support -->
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ff6b9d">
+    <meta name="description" content="自媒体博主必备的提词器工具，支持语音跟踪和自动滚动">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS PWA Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="提词器">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            z-index: 100;
+            padding: 20px;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+        
+        .settings-panel.hidden {
+            transform: translateY(100%);
+        }
+        
+        .settings-panel h1 {
+            text-align: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #ff6b9d;
+        }
+        
+        .settings-panel h1 span {
+            font-size: 32px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #ff6b9d;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            resize: vertical;
+            margin-bottom: 20px;
+        }
+        
+        textarea::placeholder {
+            color: rgba(255,255,255,0.5);
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #ff6b9d;
+        }
+        
+        .control-group input[type="range"] {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            background: rgba(255,107,157,0.3);
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .control-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #ff6b9d;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .value-display {
+            text-align: center;
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 5px;
+        }
+        
+        .toggle-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .toggle-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px 20px;
+            border: 2px solid #ff6b9d;
+            background: transparent;
+            color: #fff;
+            border-radius: 25px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .toggle-btn.active {
+            background: #ff6b9d;
+        }
+        
+        .toggle-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .start-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 22px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+            border: none;
+            border-radius: 30px;
+            color: #fff;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(255,107,157,0.4);
+        }
+        
+        .feature-note {
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            margin-top: 5px;
+        }
+        
+        /* 提词器界面 */
+        .teleprompter {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            flex-direction: column;
+            background: #000;
+        }
+        
+        .teleprompter.active {
+            display: flex;
+        }
+        
+        .prompter-text {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .text-content {
+            text-align: center;
+            line-height: 1.8;
+            transition: transform 0.15s ease-out;
+        }
+        
+        /* mirrored class removed - handled by JS transform */
+        
+        .text-content p {
+            margin: 0.5em 0;
+            transition: all 0.3s;
+        }
+        
+        .text-content p.current {
+            color: #ff6b9d;
+            text-shadow: 0 0 20px rgba(255,107,157,0.5);
+        }
+        
+        .text-content p.spoken {
+            opacity: 0.4;
+        }
+        
+        /* 中心指示线 */
+        .center-line {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 3px;
+            background: rgba(255,107,157,0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        /* 渐变遮罩 */
+        .fade-top, .fade-bottom {
+            position: fixed;
+            left: 0;
+            right: 0;
+            height: 100px;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .fade-top {
+            top: 0;
+            background: linear-gradient(to bottom, #000 0%, transparent 100%);
+        }
+        
+        .fade-bottom {
+            bottom: 60px;
+            background: linear-gradient(to top, #000 0%, transparent 100%);
+        }
+        
+        /* 语音状态指示 */
+        .voice-indicator {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: rgba(76, 175, 80, 0.95);
+            border-radius: 12px;
+            font-size: 16px;
+            z-index: 30;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .voice-indicator.active {
+            display: flex;
+        }
+        
+        .voice-indicator .mic-icon {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .voice-indicator .heard-text {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 14px;
+        }
+        
+        /* 控制栏 */
+        .control-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 10px;
+            z-index: 20;
+        }
+        
+        .ctrl-btn {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .ctrl-btn.play {
+            width: 60px;
+            height: 60px;
+            background: #ff6b9d;
+            font-size: 28px;
+        }
+        
+        .ctrl-btn.voice-active {
+            background: #4CAF50;
+            animation: pulse 1s infinite;
+        }
+        
+        .speed-adjust {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .speed-adjust button {
+            width: 36px;
+            height: 36px;
+            border: 2px solid #ff6b9d;
+            background: transparent;
+            color: #fff;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        /* 进度条 */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: var(--accent-color, #ff6b9d);
+            z-index: 25;
+            transition: width 0.1s linear;
+        }
+        
+        /* 计时器显示 */
+        .timer-display {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: monospace;
+            z-index: 25;
+        }
+        
+        /* 主题变量 */
+        :root {
+            --bg-color: #000;
+            --text-color: #fff;
+            --accent-color: #ff6b9d;
+            --secondary-bg: #1a1a2e;
+        }
+        
+        /* 主题: Classic (默认黑底白字) */
+        body.theme-classic {
+            --bg-color: #000;
+            --text-color: #fff;
+            --accent-color: #ff6b9d;
+        }
+        
+        /* 主题: Light (白底黑字) */
+        body.theme-light {
+            --bg-color: #f5f5f5;
+            --text-color: #1a1a1a;
+            --accent-color: #e91e63;
+            --secondary-bg: #ffffff;
+        }
+        body.theme-light .teleprompter { background: var(--bg-color); }
+        body.theme-light .text-content { color: var(--text-color); }
+        body.theme-light .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-light .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 主题: Midnight Blue */
+        body.theme-midnight {
+            --bg-color: #0a1628;
+            --text-color: #e0e7ff;
+            --accent-color: #60a5fa;
+        }
+        body.theme-midnight .teleprompter { background: var(--bg-color); }
+        body.theme-midnight .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-midnight .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 主题: Forest Green */
+        body.theme-forest {
+            --bg-color: #0d1f0d;
+            --text-color: #d4edda;
+            --accent-color: #4caf50;
+        }
+        body.theme-forest .teleprompter { background: var(--bg-color); }
+        body.theme-forest .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-forest .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 主题: Sunset Orange */
+        body.theme-sunset {
+            --bg-color: #1a0a00;
+            --text-color: #ffe4c4;
+            --accent-color: #ff7043;
+        }
+        body.theme-sunset .teleprompter { background: var(--bg-color); }
+        body.theme-sunset .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-sunset .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 主题: Ocean */
+        body.theme-ocean {
+            --bg-color: #001a33;
+            --text-color: #b3e0ff;
+            --accent-color: #00bcd4;
+        }
+        body.theme-ocean .teleprompter { background: var(--bg-color); }
+        body.theme-ocean .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-ocean .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 主题: Purple */
+        body.theme-purple {
+            --bg-color: #1a0033;
+            --text-color: #e6ccff;
+            --accent-color: #9c27b0;
+        }
+        body.theme-purple .teleprompter { background: var(--bg-color); }
+        body.theme-purple .fade-top { background: linear-gradient(to bottom, var(--bg-color) 0%, transparent 100%); }
+        body.theme-purple .fade-bottom { background: linear-gradient(to top, var(--bg-color) 0%, transparent 100%); }
+        
+        /* 应用主题色到高亮行 */
+        .text-content p.current {
+            color: var(--accent-color, #ff6b9d);
+            text-shadow: 0 0 20px color-mix(in srgb, var(--accent-color) 50%, transparent);
+        }
+        
+        /* 中心线使用主题色 */
+        .center-line {
+            background: color-mix(in srgb, var(--accent-color) 50%, transparent) !important;
+        }
+        
+        /* 倒计时 */
+        .countdown {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 120px;
+            font-weight: bold;
+            color: #ff6b9d;
+            z-index: 200;
+        }
+        
+        .countdown.active {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+        <h1><span>📜</span> 提词器</h1>
+        
+        <div style="position: relative;">
+            <textarea id="scriptText" placeholder="在这里粘贴你的文案...&#10;&#10;支持多段落，滚动播放时会自动居中显示。">大家好，欢迎来到我的小红书！
+
+今天想和大家分享一个超级实用的技巧。
+
+很多小伙伴问我，拍视频的时候总是忘词怎么办？
+
+其实很简单，用提词器就可以啦！
+
+像我现在就是一边看着提词器，一边录视频。
+
+这样就不用担心忘词了，而且语速也可以控制得很稳定。
+
+好啦，今天的分享就到这里。
+
+如果觉得有用的话，记得点赞收藏哦！
+
+我们下期再见，拜拜～ 👋</textarea>
+            <button id="clearBtn" style="position: absolute; top: 10px; right: 10px; background: rgba(255,107,157,0.8); border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 14px; cursor: pointer;">🗑️ 清空</button>
+        </div>
+        
+        <div class="control-group">
+            <label>📏 字体大小</label>
+            <input type="range" id="fontSize" min="24" max="72" value="42">
+            <div class="value-display" id="fontSizeValue">42px</div>
+        </div>
+        
+        <div class="control-group">
+            <label>🎤 滚动模式</label>
+            <div class="toggle-group">
+                <button class="toggle-btn active" data-scroll-mode="auto">自动滚动</button>
+                <button class="toggle-btn" data-scroll-mode="voice" id="voiceModeBtn">语音跟踪</button>
+            </div>
+            <div class="feature-note" id="voiceNote">语音跟踪：根据你说的话自动滚动（需要麦克风权限）<br>⚠️ 请在 Safari/Chrome 中打开，微信/Telegram 内置浏览器不支持</div>
+        </div>
+        
+        <div class="control-group" id="speedControl">
+            <label>🚀 滚动速度</label>
+            <input type="range" id="scrollSpeed" min="10" max="100" value="40">
+            <div class="value-display" id="speedValue">40</div>
+        </div>
+        
+        <div class="control-group">
+            <label>⏱️ 开始倒计时</label>
+            <div class="toggle-group">
+                <button class="toggle-btn" data-countdown="0">无</button>
+                <button class="toggle-btn active" data-countdown="3">3秒</button>
+                <button class="toggle-btn" data-countdown="5">5秒</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>📹 相机模式（边看词边录像）</label>
+            <div class="toggle-group">
+                <button class="toggle-btn active" data-camera="false">关闭</button>
+                <button class="toggle-btn" data-camera="true">开启</button>
+            </div>
+            <div class="feature-note">开启后文字会叠加在相机画面上，方便边看词边录像</div>
+        </div>
+        
+        <div class="control-group">
+            <label>🪞 镜像模式（配合镜子使用）</label>
+            <div class="toggle-group">
+                <button class="toggle-btn active" data-mirror="false">正常</button>
+                <button class="toggle-btn" data-mirror="true">镜像</button>
+            </div>
+        </div>
+        
+        <button class="start-btn" id="startBtn">▶️ 开始提词</button>
+    </div>
+    
+    <!-- 提词器界面 -->
+    <div class="teleprompter" id="teleprompter">
+        <!-- 相机预览 -->
+        <video id="cameraPreview" autoplay playsinline muted style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1;"></video>
+        
+        <!-- 录制用的 Canvas（隐藏）-->
+        <canvas id="recordCanvas" style="display:none;"></canvas>
+        
+        <!-- 录制指示器 -->
+        <div id="recordIndicator" style="display:none; position:fixed; top:20px; left:20px; background:red; color:white; padding:8px 16px; border-radius:20px; font-size:14px; z-index:100; animation: blink 1s infinite;">
+            🔴 录制中...
+        </div>
+        
+        <!-- 进度条 -->
+        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+        
+        <!-- 计时器 -->
+        <div class="timer-display" id="timerDisplay">00:00</div>
+        
+        <!-- 调试面板 -->
+        <div id="debugPanel" style="position:fixed; bottom:100px; left:10px; right:10px; background:rgba(0,0,0,0.9); color:#0f0; font-family:monospace; font-size:11px; padding:8px; border-radius:8px; max-height:150px; overflow-y:auto; z-index:999; display:none;">
+            <div id="debugLog"></div>
+        </div>
+        
+        <div class="fade-top"></div>
+        <div class="center-line"></div>
+        
+        <!-- 语音状态指示 -->
+        <div class="voice-indicator" id="voiceIndicator">
+            <span class="mic-icon">🎤</span>
+            <span class="heard-text" id="heardText">听到: ...</span>
+        </div>
+        
+        <div class="prompter-text">
+            <div class="text-content" id="textContent"></div>
+        </div>
+        <div class="fade-bottom"></div>
+        
+        <div class="control-bar">
+            <button class="ctrl-btn" id="backBtn">⬅️</button>
+            <div class="speed-adjust" id="speedAdjustBar">
+                <button id="speedDown">−</button>
+                <span id="currentSpeed">40</span>
+                <button id="speedUp">+</button>
+            </div>
+            <button class="ctrl-btn play" id="playPauseBtn">⏸️</button>
+            <button class="ctrl-btn" id="voiceBtn" style="display:none;">🎤</button>
+            <button class="ctrl-btn" id="recordBtn" style="display:none; background:#ff4444;">⏺</button>
+            <button class="ctrl-btn" id="resetBtn">↺</button>
+            <button class="ctrl-btn" id="exitBtn">✕</button>
+        </div>
+    </div>
+    
+    <!-- 倒计时 -->
+    <div class="countdown" id="countdown"></div>
+    
+    <script>
+        // 状态
+        let isPlaying = false;
+        let scrollPosition = 0;
+        let speed = 40;
+        let fontSize = 42;
+        let countdownSeconds = 3;
+        let isMirrored = false;
+        let animationId = null;
+        let scrollMode = 'auto'; // 'auto' or 'voice'
+        let cameraEnabled = false;
+        let cameraStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let canvasStream = null;
+        let recordingAnimationId = null;
+        let currentTheme = 'classic';
+        let startTime = null;
+        let wakeLock = null;
+        
+        // 主题列表
+        const themes = ['classic', 'light', 'midnight', 'forest', 'sunset', 'ocean', 'purple'];
+        const themeNames = {
+            classic: '经典黑',
+            light: '明亮白',
+            midnight: '午夜蓝',
+            forest: '森林绿',
+            sunset: '日落橙',
+            ocean: '海洋蓝',
+            purple: '神秘紫'
+        };
+        
+        // 语音识别相关
+        let recognition = null;
+        let isVoiceActive = false;
+        let scriptLines = [];
+        let currentLineIndex = 0;
+        let allText = '';
+        
+        // 检查语音识别支持
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const speechSupported = !!SpeechRecognition;
+        
+        // 元素
+        const settingsPanel = document.getElementById('settingsPanel');
+        const teleprompter = document.getElementById('teleprompter');
+        const textContent = document.getElementById('textContent');
+        const countdown = document.getElementById('countdown');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const currentSpeedEl = document.getElementById('currentSpeed');
+        const voiceIndicator = document.getElementById('voiceIndicator');
+        const heardText = document.getElementById('heardText');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const speedAdjustBar = document.getElementById('speedAdjustBar');
+        const speedControl = document.getElementById('speedControl');
+        const voiceModeBtn = document.getElementById('voiceModeBtn');
+        const voiceNote = document.getElementById('voiceNote');
+        
+        // 初始化语音识别
+        if (speechSupported) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;  // 获取中间结果，更快响应
+            recognition.maxAlternatives = 1;
+            recognition.lang = 'zh-CN';
+            
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    transcript += event.results[i][0].transcript;
+                }
+                
+                // 显示识别到的文字
+                heardText.textContent = '听到: ' + transcript.slice(-30);
+                console.log('识别到:', transcript);
+                
+                // 模糊匹配找到当前位置
+                findAndScrollToPosition(transcript);
+            };
+            
+            recognition.onstart = () => {
+                console.log('语音识别已启动');
+                heardText.textContent = '🎤 正在听... 请开始说话';
+            };
+            
+            recognition.onaudiostart = () => {
+                console.log('检测到音频输入');
+                heardText.textContent = '🎤 检测到声音...';
+            };
+            
+            recognition.onspeechstart = () => {
+                console.log('检测到语音');
+                heardText.textContent = '🎤 正在识别...';
+            };
+            
+            recognition.onerror = (event) => {
+                console.log('语音识别错误:', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('请允许麦克风权限以使用语音跟踪功能');
+                    stopVoiceRecognition();
+                }
+            };
+            
+            recognition.onend = () => {
+                console.log('语音识别结束');
+                // 如果还在语音模式，自动重启
+                if (isVoiceActive && scrollMode === 'voice') {
+                    heardText.textContent = '重新连接中...';
+                    setTimeout(() => {
+                        try {
+                            recognition.start();
+                            console.log('重新启动语音识别');
+                        } catch(e) {
+                            console.log('重启失败:', e);
+                        }
+                    }, 100);
+                }
+            };
+            
+            recognition.onnomatch = () => {
+                console.log('没有匹配到语音');
+                heardText.textContent = '没听清，请继续说...';
+            };
+            
+            recognition.onspeechend = () => {
+                console.log('检测到语音结束');
+            };
+        } else {
+            // 不支持语音识别
+            voiceModeBtn.disabled = true;
+            voiceNote.textContent = '⚠️ 你的浏览器不支持语音识别，请使用 Chrome 或 Safari';
+            voiceNote.style.color = '#ff6b6b';
+        }
+        
+        // 调试面板
+        const debugPanel = document.getElementById('debugPanel');
+        const debugLog = document.getElementById('debugLog');
+        let debugLines = [];
+        
+        function debug(msg) {
+            const time = new Date().toLocaleTimeString();
+            debugLines.push(`[${time}] ${msg}`);
+            if (debugLines.length > 20) debugLines.shift();
+            debugLog.innerHTML = debugLines.join('<br>');
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+            console.log(msg);
+        }
+        
+        // 模糊匹配函数 - 容忍语音识别误差
+        let lastMatchTime = 0;
+        
+        // 计算两个字符串的相似度 (0-1)
+        function similarity(s1, s2) {
+            if (s1.length === 0 || s2.length === 0) return 0;
+            
+            let matches = 0;
+            const len = Math.min(s1.length, s2.length);
+            
+            for (let i = 0; i < len; i++) {
+                if (s1[i] === s2[i]) matches++;
+            }
+            
+            // 也检查是否有连续3字匹配（位置不要求对齐）
+            for (let i = 0; i <= s1.length - 3; i++) {
+                const chunk = s1.slice(i, i + 3);
+                if (s2.includes(chunk)) {
+                    matches += 2; // 额外奖励
+                    break;
+                }
+            }
+            
+            return matches / Math.max(s1.length, s2.length);
+        }
+        
+        function findAndScrollToPosition(transcript) {
+            const now = Date.now();
+            const timeSinceLast = now - lastMatchTime;
+            
+            // 防抖：至少间隔0.5秒才能滚动（快语速友好）
+            if (timeSinceLast < 500) {
+                debug(`⏳ 防抖中 (${Math.round(timeSinceLast)}ms < 500ms)`);
+                return;
+            }
+            
+            // 清理文本
+            const cleanTranscript = transcript.replace(/[，。！？、,.\s\n·~！@#￥%……&*（）—+=\[\]{}|;:'",.<>/?·""'']/g, '');
+            if (cleanTranscript.length < 6) {
+                debug(`⚠️ 文本太短: ${cleanTranscript.length}字`);
+                return;
+            }
+            
+            debug(`📝 当前行=${currentLineIndex}, 识别="${cleanTranscript.slice(-15)}"`);
+            
+            // 找下一个非空行
+            let targetLine = currentLineIndex + 1;
+            while (targetLine < scriptLines.length && (!scriptLines[targetLine] || !scriptLines[targetLine].trim())) {
+                targetLine++;
+            }
+            if (targetLine >= scriptLines.length) {
+                debug(`⚠️ 已是最后一行`);
+                return;
+            }
+            
+            const lineText = scriptLines[targetLine];
+            const lineClean = lineText.replace(/[，。！？、,.\s\n·~！@#￥%……&*（）—+=\[\]{}|;:'",.<>/?·""'']/g, '');
+            if (lineClean.length < 4) {
+                debug(`⚠️ 目标行太短`);
+                return;
+            }
+            
+            // 方法1: 提前触发 - 检测倒数第6到第3个字（更早触发）
+            const currentText = scriptLines[currentLineIndex] || '';
+            const currentClean = currentText.replace(/[，。！？、,.\s\n·~！@#￥%……&*（）—+=\[\]{}|;:'",.<>/?·""'']/g, '');
+            if (currentClean.length >= 6) {
+                // 检查倒数6-3位置的3个字（提前触发）
+                const earlyTrigger = currentClean.slice(-6, -3);
+                if (earlyTrigger.length === 3 && cleanTranscript.includes(earlyTrigger)) {
+                    debug(`✅ 提前触发! "${earlyTrigger}" 在识别文本中`);
+                    lastMatchTime = now;
+                    scrollToLine(targetLine);
+                    return;
+                }
+                // 检查倒数9-6位置（更早）
+                if (currentClean.length >= 9) {
+                    const veryEarlyTrigger = currentClean.slice(-9, -6);
+                    if (veryEarlyTrigger.length === 3 && cleanTranscript.includes(veryEarlyTrigger)) {
+                        debug(`✅ 超前触发! "${veryEarlyTrigger}" 在识别文本中`);
+                        lastMatchTime = now;
+                        scrollToLine(targetLine);
+                        return;
+                    }
+                }
+            }
+            
+            // 方法2: 检查下一行的任意部分（不只是开头）
+            debug(`🔍 检查行${targetLine}的任意片段在"...${cleanTranscript.slice(-15)}"`);
+            
+            // 生成下一行的多个3字片段
+            for (let i = 0; i <= lineClean.length - 3; i++) {
+                const chunk = lineClean.slice(i, i + 3);
+                if (cleanTranscript.includes(chunk)) {
+                    debug(`✅ 匹配! "${chunk}" 在识别文本中`);
+                    lastMatchTime = now;
+                    scrollToLine(targetLine);
+                    return;
+                }
+            }
+            
+            debug(`❌ 无匹配`);
+        }
+        
+        // 滚动到指定行
+        function scrollToLine(lineIndex) {
+            if (lineIndex < currentLineIndex) {
+                debug(`🚫 scrollToLine(${lineIndex}) 拒绝: 小于当前${currentLineIndex}`);
+                return;
+            }
+            if (lineIndex === currentLineIndex) {
+                debug(`🚫 scrollToLine(${lineIndex}) 拒绝: 已在此行`);
+                return;
+            }
+            
+            debug(`📜 scrollToLine(${lineIndex}) 执行! 从${currentLineIndex}跳到${lineIndex}`);
+            currentLineIndex = lineIndex;
+            
+            // 更新高亮
+            const paragraphs = textContent.querySelectorAll('p');
+            paragraphs.forEach((p, i) => {
+                p.classList.remove('current', 'spoken');
+                if (i < lineIndex) {
+                    p.classList.add('spoken');
+                } else if (i === lineIndex) {
+                    p.classList.add('current');
+                }
+            });
+            
+            // 滚动到该行 - 使用 getBoundingClientRect 确保在手机上也准确
+            const targetP = paragraphs[lineIndex];
+            if (targetP) {
+                const rect = targetP.getBoundingClientRect();
+                const viewportCenter = window.innerHeight * 0.35;
+                const targetCenter = rect.top + rect.height / 2;
+                const adjustment = targetCenter - viewportCenter;
+                
+                debug(`📐 滚动计算: 目标中心=${Math.round(targetCenter)}, 屏幕中心=${Math.round(viewportCenter)}, 调整=${Math.round(adjustment)}`);
+                
+                scrollPosition -= adjustment;
+                updateTransform();
+            }
+        }
+        
+        function updateTransform() {
+            const transform = isMirrored 
+                ? `translateY(${scrollPosition}px) scaleX(-1)` 
+                : `translateY(${scrollPosition}px)`;
+            textContent.style.transform = transform;
+        }
+        
+        function startVoiceRecognition() {
+            if (!recognition) {
+                heardText.textContent = '❌ 浏览器不支持语音识别';
+                voiceIndicator.classList.add('active');
+                return;
+            }
+            
+            isVoiceActive = true;
+            voiceIndicator.classList.add('active');
+            voiceBtn.classList.add('voice-active');
+            playPauseBtn.style.display = 'none';
+            voiceBtn.style.display = 'flex';
+            speedAdjustBar.style.display = 'none';
+            heardText.textContent = '启动中...点击允许麦克风';
+            
+            // 调试面板已关闭
+            // debugPanel.style.display = 'block';
+            // debugLines = [];
+            // debug(`🎤 语音识别启动, 当前行=${currentLineIndex}`);
+            
+            // 3秒后如果还没启动，显示提示
+            const startTimeout = setTimeout(() => {
+                if (heardText.textContent.includes('启动中')) {
+                    heardText.textContent = '⚠️ 请在弹窗中允许麦克风，或检查 设置→Safari→麦克风';
+                }
+            }, 3000);
+            
+            try {
+                recognition.start();
+                console.log('recognition.start() 已调用');
+            } catch(e) {
+                clearTimeout(startTimeout);
+                console.log('启动错误:', e);
+                heardText.textContent = '❌ 错误: ' + e.message;
+            }
+        }
+        
+        function stopVoiceRecognition() {
+            if (!recognition) return;
+            isVoiceActive = false;
+            voiceIndicator.classList.remove('active');
+            voiceBtn.classList.remove('voice-active');
+            
+            try {
+                recognition.stop();
+            } catch(e) {}
+        }
+        
+        // 清空按钮
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('scriptText').value = '';
+            document.getElementById('scriptText').focus();
+        });
+        
+        // 设置事件
+        document.getElementById('fontSize').addEventListener('input', (e) => {
+            fontSize = e.target.value;
+            document.getElementById('fontSizeValue').textContent = fontSize + 'px';
+        });
+        
+        document.getElementById('scrollSpeed').addEventListener('input', (e) => {
+            speed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = speed;
+            currentSpeedEl.textContent = speed;
+        });
+        
+        // 滚动模式选择
+        document.querySelectorAll('[data-scroll-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+                document.querySelectorAll('[data-scroll-mode]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                scrollMode = btn.dataset.scrollMode;
+                
+                // 语音模式下隐藏速度控制
+                speedControl.style.display = scrollMode === 'voice' ? 'none' : 'block';
+            });
+        });
+        
+        // 倒计时选择
+        document.querySelectorAll('[data-countdown]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-countdown]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                countdownSeconds = parseInt(btn.dataset.countdown);
+            });
+        });
+        
+        // 镜像选择
+        document.querySelectorAll('[data-mirror]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-mirror]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                isMirrored = btn.dataset.mirror === 'true';
+            });
+        });
+        
+        // 相机选择
+        document.querySelectorAll('[data-camera]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-camera]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                cameraEnabled = btn.dataset.camera === 'true';
+            });
+        });
+        
+        // 相机控制函数
+        const cameraPreview = document.getElementById('cameraPreview');
+        
+        async function startCamera() {
+            if (!cameraEnabled) return;
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: true  // 需要音频用于录制
+                });
+                cameraPreview.srcObject = cameraStream;
+                cameraPreview.style.display = 'block';
+                // 相机画面镜像（自拍模式）
+                cameraPreview.style.transform = 'scaleX(-1)';
+                // 文字半透明以便看清背景
+                textContent.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8), -2px -2px 4px rgba(0,0,0,0.8)';
+                teleprompter.style.background = 'transparent';
+                // 显示录制按钮
+                recordBtn.style.display = 'flex';
+            } catch (e) {
+                console.error('相机访问失败:', e);
+                alert('无法访问相机，请检查权限设置');
+            }
+        }
+        
+        function stopCamera() {
+            if (isRecording) {
+                stopRecording();
+            }
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraPreview.style.display = 'none';
+            cameraPreview.srcObject = null;
+            textContent.style.textShadow = '';
+            teleprompter.style.background = '';
+            recordBtn.style.display = 'none';
+        }
+        
+        // 录制功能
+        const recordCanvas = document.getElementById('recordCanvas');
+        const recordCtx = recordCanvas.getContext('2d');
+        const recordBtn = document.getElementById('recordBtn');
+        const recordIndicator = document.getElementById('recordIndicator');
+        
+        function startRecording() {
+            if (!cameraStream || isRecording) return;
+            
+            // 设置 canvas 尺寸
+            recordCanvas.width = cameraPreview.videoWidth || 1280;
+            recordCanvas.height = cameraPreview.videoHeight || 720;
+            
+            // 开始绘制循环
+            function drawFrame() {
+                if (!isRecording) return;
+                
+                // 绘制视频帧（镜像）
+                recordCtx.save();
+                recordCtx.scale(-1, 1);
+                recordCtx.drawImage(cameraPreview, -recordCanvas.width, 0, recordCanvas.width, recordCanvas.height);
+                recordCtx.restore();
+                
+                // 绘制文字
+                const lines = textContent.querySelectorAll('p');
+                const centerY = recordCanvas.height * 0.35;
+                recordCtx.font = `bold ${fontSize * 1.5}px -apple-system, sans-serif`;
+                recordCtx.textAlign = 'center';
+                recordCtx.fillStyle = '#fff';
+                recordCtx.shadowColor = 'rgba(0,0,0,0.8)';
+                recordCtx.shadowBlur = 10;
+                
+                lines.forEach((line, i) => {
+                    if (line.classList.contains('current')) {
+                        recordCtx.fillStyle = '#ff6b9d';
+                        const lineY = centerY;
+                        recordCtx.fillText(line.textContent, recordCanvas.width / 2, lineY);
+                    }
+                });
+                
+                recordCtx.shadowBlur = 0;
+                recordingAnimationId = requestAnimationFrame(drawFrame);
+            }
+            
+            // 获取 canvas 流
+            canvasStream = recordCanvas.captureStream(30);
+            
+            // 添加音频轨道（如果有）
+            if (cameraStream.getAudioTracks().length > 0) {
+                canvasStream.addTrack(cameraStream.getAudioTracks()[0]);
+            }
+            
+            // 创建 MediaRecorder - 选择兼容格式
+            recordedChunks = [];
+            // 检测支持的格式（优先 mp4）
+            const formats = [
+                'video/mp4;codecs=avc1',
+                'video/mp4',
+                'video/webm;codecs=h264',
+                'video/webm;codecs=vp8,opus',
+                'video/webm;codecs=vp9',
+                'video/webm'
+            ];
+            let mimeType = '';
+            for (const fmt of formats) {
+                if (MediaRecorder.isTypeSupported(fmt)) {
+                    mimeType = fmt;
+                    break;
+                }
+            }
+            if (!mimeType) {
+                alert('你的浏览器不支持视频录制');
+                return;
+            }
+            const isWebm = mimeType.includes('webm');
+            console.log('使用录制格式:', mimeType, isWebm ? '(需要转换才能在iOS打开)' : '');
+            mediaRecorder = new MediaRecorder(canvasStream, { mimeType });
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+            
+            mediaRecorder.onstop = async () => {
+                const actualMimeType = mediaRecorder.mimeType || 'video/mp4';
+                const blob = new Blob(recordedChunks, { type: actualMimeType });
+                const ext = actualMimeType.includes('mp4') ? 'mp4' : 'webm';
+                
+                // 尝试使用 Web Share API（iOS 支持）
+                if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], `video.${ext}`, { type: actualMimeType })] })) {
+                    try {
+                        const file = new File([blob], `teleprompter-${Date.now()}.${ext}`, { type: actualMimeType });
+                        await navigator.share({
+                            files: [file],
+                            title: '提词器录制',
+                            text: '我的提词器录制视频'
+                        });
+                        return;
+                    } catch (e) {
+                        console.log('分享取消或失败:', e);
+                    }
+                }
+                
+                // 后备方案：显示视频预览 + 下载/分享按钮
+                const url = URL.createObjectURL(blob);
+                const filename = `teleprompter-${Date.now()}.${ext}`;
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+                modal.innerHTML = `
+                    <p style="color:#fff;margin-bottom:10px;text-align:center;">🎬 录制完成！</p>
+                    <video src="${url}" controls playsinline style="max-width:100%;max-height:50vh;border-radius:10px;"></video>
+                    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;justify-content:center;">
+                        <a href="${url}" download="${filename}" style="padding:15px 30px;font-size:16px;border:none;border-radius:10px;background:#4CAF50;color:#fff;text-decoration:none;">📥 下载视频</a>
+                        <button id="shareVideoBtn" style="padding:15px 30px;font-size:16px;border:none;border-radius:10px;background:#2196F3;color:#fff;">📤 分享</button>
+                        <button onclick="this.closest('div').parentElement.remove()" style="padding:15px 30px;font-size:16px;border:none;border-radius:10px;background:#ff6b9d;color:#fff;">✕ 关闭</button>
+                    </div>
+                    <p style="color:#888;margin-top:15px;font-size:12px;text-align:center;">iOS用户：长按视频可保存到相册</p>
+                    ${ext === 'webm' ? '<p style="color:#ffcc00;margin-top:10px;font-size:12px;text-align:center;">⚠️ WebM格式iPhone无法直接播放<br>推荐用 <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#4CAF50;">CloudConvert</a> 转换为MP4</p>' : ''}
+                    ${ext === 'webm' ? '<p style="color:#888;margin-top:5px;font-size:11px;text-align:center;">💡 或使用Chrome浏览器录制可得到更好的兼容性</p>' : ''}
+                `;
+                document.body.appendChild(modal);
+                
+                // 分享按钮点击事件
+                modal.querySelector('#shareVideoBtn').onclick = async () => {
+                    if (navigator.share) {
+                        try {
+                            const file = new File([blob], filename, { type: actualMimeType });
+                            await navigator.share({ files: [file], title: '提词器录制' });
+                        } catch (e) {
+                            alert('分享取消或不支持');
+                        }
+                    } else {
+                        alert('当前浏览器不支持分享功能');
+                    }
+                };
+            };
+            
+            isRecording = true;
+            mediaRecorder.start();
+            drawFrame();
+            recordBtn.textContent = '⏹';
+            recordBtn.style.background = '#44ff44';
+            recordIndicator.style.display = 'block';
+        }
+        
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            cancelAnimationFrame(recordingAnimationId);
+            mediaRecorder.stop();
+            recordBtn.textContent = '⏺';
+            recordBtn.style.background = '#ff4444';
+            recordIndicator.style.display = 'none';
+        }
+        
+        recordBtn.addEventListener('click', () => {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        });
+        
+        // 开始
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            const text = document.getElementById('scriptText').value.trim();
+            if (!text) {
+                alert('请先输入文案！');
+                return;
+            }
+            
+            // 如果是语音模式，先在用户点击时请求权限
+            if (scrollMode === 'voice' && recognition) {
+                try {
+                    // 必须在用户点击事件中直接启动
+                    recognition.start();
+                    recognition.stop(); // 立即停止，只是为了触发权限请求
+                    await new Promise(r => setTimeout(r, 500)); // 等待权限弹窗
+                } catch(e) {
+                    console.log('预启动:', e.message);
+                }
+            }
+            
+            // 保存脚本行（保留空行以对齐段落索引）
+            scriptLines = text.split('\n');
+            allText = text;
+            currentLineIndex = 0;
+            lastMatchTime = 0; // 重置匹配时间
+            
+            // 让输入框失去焦点，确保从头开始
+            document.getElementById('scriptText').blur();
+            
+            // 设置文本
+            textContent.innerHTML = text.split('\n').map((line, i) => 
+                line ? `<p style="margin: 0.5em 0;" data-line="${i}">${line}</p>` : '<p style="margin: 0.5em 0;">&nbsp;</p>'
+            ).join('');
+            textContent.style.fontSize = fontSize + 'px';
+            
+            // 镜像由 updateTransform() 处理
+            
+            // 高亮第一行，并把第一行定位到屏幕中央
+            setTimeout(() => {
+                const firstP = textContent.querySelector('p');
+                if (firstP) {
+                    firstP.classList.add('current');
+                    // 初始化时 scrollPosition=0，直接计算调整量
+                    scrollPosition = 0;
+                    const rect = firstP.getBoundingClientRect();
+                    const viewportCenter = window.innerHeight * 0.35;
+                    const targetCenter = rect.top + rect.height / 2;
+                    scrollPosition = viewportCenter - targetCenter;
+                    updateTransform();
+                }
+            }, 150);
+            
+            // 设置控制栏
+            if (scrollMode === 'voice') {
+                playPauseBtn.style.display = 'none';
+                voiceBtn.style.display = 'flex';
+                speedAdjustBar.style.display = 'none';
+            } else {
+                playPauseBtn.style.display = 'flex';
+                voiceBtn.style.display = 'none';
+                speedAdjustBar.style.display = 'flex';
+            }
+            
+            settingsPanel.classList.add('hidden');
+            teleprompter.classList.add('active');
+            
+            // 启动相机（如果开启）
+            if (cameraEnabled) {
+                startCamera();
+            }
+            
+            // 倒计时
+            if (countdownSeconds > 0) {
+                startCountdown();
+            } else {
+                if (scrollMode === 'voice') {
+                    startVoiceRecognition();
+                } else {
+                    startScrolling();
+                }
+            }
+        });
+        
+        function startCountdown() {
+            let count = countdownSeconds;
+            countdown.classList.add('active');
+            countdown.textContent = count;
+            
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdown.textContent = count;
+                } else {
+                    clearInterval(timer);
+                    countdown.classList.remove('active');
+                    if (scrollMode === 'voice') {
+                        startVoiceRecognition();
+                    } else {
+                        startScrolling();
+                    }
+                }
+            }, 1000);
+        }
+        
+        function startScrolling() {
+            isPlaying = true;
+            playPauseBtn.textContent = '⏸️';
+            scroll();
+        }
+        
+        function scroll() {
+            if (!isPlaying) return;
+            
+            scrollPosition -= speed / 60;
+            updateTransform();
+            
+            // 检查是否滚动完毕
+            const textHeight = textContent.offsetHeight;
+            if (scrollPosition < -textHeight) {
+                isPlaying = false;
+                playPauseBtn.textContent = '▶️';
+                return;
+            }
+            
+            animationId = requestAnimationFrame(scroll);
+        }
+        
+        // 播放/暂停
+        playPauseBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                isPlaying = false;
+                playPauseBtn.textContent = '▶️';
+                cancelAnimationFrame(animationId);
+            } else {
+                startScrolling();
+            }
+        });
+        
+        // 语音按钮切换
+        voiceBtn.addEventListener('click', () => {
+            if (isVoiceActive) {
+                stopVoiceRecognition();
+            } else {
+                startVoiceRecognition();
+            }
+        });
+        
+        // 速度调节
+        document.getElementById('speedUp').addEventListener('click', () => {
+            speed = Math.min(100, speed + 5);
+            currentSpeedEl.textContent = speed;
+        });
+        
+        document.getElementById('speedDown').addEventListener('click', () => {
+            speed = Math.max(10, speed - 5);
+            currentSpeedEl.textContent = speed;
+        });
+        
+        // 重置
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            currentLineIndex = 0;
+            lastMatchTime = 0; // 重置匹配时间
+            playPauseBtn.textContent = '▶️';
+            
+            // 清除高亮并重新定位到第一行
+            const paragraphs = textContent.querySelectorAll('p');
+            paragraphs.forEach((p, i) => {
+                p.classList.remove('current', 'spoken');
+                if (i === 0) p.classList.add('current');
+            });
+            
+            // 重新计算第一行居中位置 - 直接从当前位置调整
+            const firstP = paragraphs[0];
+            if (firstP) {
+                const rect = firstP.getBoundingClientRect();
+                const viewportCenter = window.innerHeight * 0.35;
+                const targetCenter = rect.top + rect.height / 2;
+                const adjustment = targetCenter - viewportCenter;
+                scrollPosition -= adjustment;
+                updateTransform();
+                
+                debug(`🔄 Reset: 调整=${Math.round(adjustment)}, 新scrollPosition=${Math.round(scrollPosition)}`);
+            }
+        });
+        
+        // 返回设置
+        document.getElementById('backBtn').addEventListener('click', () => {
+            exitPrompter();
+        });
+        
+        document.getElementById('exitBtn').addEventListener('click', () => {
+            exitPrompter();
+        });
+        
+        function exitPrompter() {
+            isPlaying = false;
+            cancelAnimationFrame(animationId);
+            stopVoiceRecognition();
+            stopCamera();
+            teleprompter.classList.remove('active');
+            settingsPanel.classList.remove('hidden');
+        }
+        
+        // 触摸控制（点击屏幕暂停/继续）- 仅自动模式
+        document.querySelector('.prompter-text').addEventListener('click', () => {
+            if (scrollMode === 'auto') {
+                if (isPlaying) {
+                    isPlaying = false;
+                    playPauseBtn.textContent = '▶️';
+                    cancelAnimationFrame(animationId);
+                } else {
+                    startScrolling();
+                }
+            }
+        });
+        
+        // 防止iOS橡皮筋效果
+        document.body.addEventListener('touchmove', (e) => {
+            if (teleprompter.classList.contains('active')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (!teleprompter.classList.contains('active')) return;
+            
+            switch(e.code) {
+                case 'Space':
+                    e.preventDefault();
+                    if (scrollMode === 'auto') {
+                        if (isPlaying) {
+                            isPlaying = false;
+                            playPauseBtn.textContent = '▶️';
+                            cancelAnimationFrame(animationId);
+                        } else {
+                            startScrolling();
+                        }
+                    }
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    speed = Math.min(100, speed + 5);
+                    currentSpeedEl.textContent = speed;
+                    break;
+                case 'ArrowDown':
+                    e.preventDefault();
+                    speed = Math.max(10, speed - 5);
+                    currentSpeedEl.textContent = speed;
+                    break;
+                case 'KeyR':
+                    e.preventDefault();
+                    document.getElementById('resetBtn').click();
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    exitPrompter();
+                    break;
+            }
+        });
+        
+        // 自动滚动模式下也更新当前行高亮
+        function updateCurrentLineHighlight() {
+            if (scrollMode !== 'auto' || !isPlaying) return;
+            
+            const paragraphs = textContent.querySelectorAll('p');
+            const centerY = window.innerHeight * 0.35;
+            
+            paragraphs.forEach((p, i) => {
+                const rect = p.getBoundingClientRect();
+                const pCenter = rect.top + rect.height / 2;
+                
+                p.classList.remove('current', 'spoken');
+                if (Math.abs(pCenter - centerY) < rect.height) {
+                    p.classList.add('current');
+                    currentLineIndex = i;
+                } else if (rect.bottom < centerY) {
+                    p.classList.add('spoken');
+                }
+            });
+            
+            if (isPlaying) {
+                requestAnimationFrame(updateCurrentLineHighlight);
+            }
+        }
+        
+        // 修改 startScrolling 启动高亮更新
+        const originalStartScrolling = startScrolling;
+        startScrolling = function() {
+            originalStartScrolling();
+            if (scrollMode === 'auto') {
+                updateCurrentLineHighlight();
+            }
+        };
+        
+        // 保存设置到 localStorage
+        function saveSettings() {
+            localStorage.setItem('teleprompter-settings', JSON.stringify({
+                fontSize, speed, countdownSeconds, isMirrored, scrollMode
+            }));
+        }
+        
+        // 加载设置
+        function loadSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('teleprompter-settings'));
+                if (saved) {
+                    fontSize = saved.fontSize || 42;
+                    speed = saved.speed || 40;
+                    countdownSeconds = saved.countdownSeconds ?? 3;
+                    isMirrored = saved.isMirrored || false;
+                    scrollMode = saved.scrollMode || 'auto';
+                    
+                    // 更新 UI
+                    document.getElementById('fontSize').value = fontSize;
+                    document.getElementById('fontSizeValue').textContent = fontSize + 'px';
+                    document.getElementById('scrollSpeed').value = speed;
+                    document.getElementById('speedValue').textContent = speed;
+                    currentSpeedEl.textContent = speed;
+                    
+                    // 更新按钮状态
+                    document.querySelectorAll('[data-countdown]').forEach(b => {
+                        b.classList.toggle('active', parseInt(b.dataset.countdown) === countdownSeconds);
+                    });
+                    document.querySelectorAll('[data-mirror]').forEach(b => {
+                        b.classList.toggle('active', (b.dataset.mirror === 'true') === isMirrored);
+                    });
+                    document.querySelectorAll('[data-scroll-mode]').forEach(b => {
+                        b.classList.toggle('active', b.dataset.scrollMode === scrollMode);
+                    });
+                    speedControl.style.display = scrollMode === 'voice' ? 'none' : 'block';
+                }
+            } catch(e) {}
+        }
+        
+        // 设置变化时保存
+        ['fontSize', 'scrollSpeed'].forEach(id => {
+            document.getElementById(id).addEventListener('change', saveSettings);
+        });
+        document.querySelectorAll('[data-countdown], [data-mirror], [data-scroll-mode]').forEach(btn => {
+            btn.addEventListener('click', () => setTimeout(saveSettings, 100));
+        });
+        
+        // 页面加载时恢复设置
+        loadSettings();
+        
+        // ========== 新功能: 屏幕常亮 ==========
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('屏幕常亮已启用');
+                    wakeLock.addEventListener('release', () => {
+                        console.log('屏幕常亮已释放');
+                    });
+                } catch (e) {
+                    console.log('屏幕常亮请求失败:', e);
+                }
+            }
+        }
+        
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+        
+        // ========== 新功能: 进度条 + 计时器 ==========
+        const progressBar = document.getElementById('progressBar');
+        const timerDisplay = document.getElementById('timerDisplay');
+        let timerInterval = null;
+        
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            requestAnimationFrame(updateProgress);
+        }
+        
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+        
+        function resetTimer() {
+            stopTimer();
+            startTime = null;
+            timerDisplay.textContent = '00:00';
+            progressBar.style.width = '0%';
+        }
+        
+        function updateTimer() {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const seconds = (elapsed % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${minutes}:${seconds}`;
+        }
+        
+        function updateProgress() {
+            if (!teleprompter.classList.contains('active')) return;
+            
+            const textHeight = textContent.offsetHeight;
+            const viewportHeight = window.innerHeight;
+            const totalScroll = textHeight + viewportHeight;
+            const scrolled = viewportHeight / 2 - scrollPosition;
+            const progress = Math.min(100, Math.max(0, (scrolled / textHeight) * 100));
+            
+            progressBar.style.width = progress + '%';
+            
+            requestAnimationFrame(updateProgress);
+        }
+        
+        // 修改 startScrolling 加入计时器和屏幕常亮
+        const _originalStart = startScrolling;
+        startScrolling = function() {
+            _originalStart();
+            startTimer();
+            requestWakeLock();
+        };
+        
+        // 修改 exitPrompter 释放资源
+        const _originalExit = exitPrompter;
+        exitPrompter = function() {
+            _originalExit();
+            stopTimer();
+            resetTimer();
+            releaseWakeLock();
+        };
+        
+        // ========== 新功能: 主题切换 ==========
+        function setTheme(theme) {
+            themes.forEach(t => document.body.classList.remove('theme-' + t));
+            document.body.classList.add('theme-' + theme);
+            currentTheme = theme;
+            
+            // 保存到设置
+            localStorage.setItem('teleprompter-theme', theme);
+            
+            // 显示提示
+            if (teleprompter.classList.contains('active')) {
+                showToast('🎨 ' + themeNames[theme]);
+            }
+        }
+        
+        function nextTheme() {
+            const currentIndex = themes.indexOf(currentTheme);
+            const nextIndex = (currentIndex + 1) % themes.length;
+            setTheme(themes[nextIndex]);
+        }
+        
+        // 加载保存的主题
+        const savedTheme = localStorage.getItem('teleprompter-theme');
+        if (savedTheme && themes.includes(savedTheme)) {
+            setTheme(savedTheme);
+        }
+        
+        // Toast 提示
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 80px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: #fff;
+                padding: 10px 20px;
+                border-radius: 20px;
+                font-size: 16px;
+                z-index: 300;
+                animation: fadeInOut 1.5s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 1500);
+        }
+        
+        // 添加 fadeInOut 动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+                20% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+                100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+            }
+            @keyframes blink {
+                0%, 50% { opacity: 1; }
+                51%, 100% { opacity: 0.5; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // 添加 T 键切换主题到键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (!teleprompter.classList.contains('active')) return;
+            if (e.code === 'KeyT') {
+                e.preventDefault();
+                nextTheme();
+            }
+        });
+        
+        // 注册 Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then((registration) => {
+                        console.log('ServiceWorker 注册成功:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('ServiceWorker 注册失败:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

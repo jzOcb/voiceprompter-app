@@ -1,0 +1,16 @@
+{
+  "appId": "com.voiceprompter.app",
+  "appName": "VoicePrompter",
+  "webDir": "www",
+  "plugins": {
+    "Camera": {
+      "presentationStyle": "fullScreen"
+    }
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
