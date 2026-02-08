@@ -7,6 +7,3 @@ project(':capacitor-camera').projectDir = new File('../node_modules/@capacitor/c
 
 include ':capacitor-filesystem'
 project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacitor/filesystem/android')
-
-include ':capacitor-video-recorder'
-project(':capacitor-video-recorder').projectDir = new File('../node_modules/capacitor-video-recorder/android/capacitor-video-recorder')
